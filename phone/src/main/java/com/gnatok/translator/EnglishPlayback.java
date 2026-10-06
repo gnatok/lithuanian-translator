@@ -72,6 +72,7 @@ final class EnglishPlayback implements AutoCloseable {
         }).show();
     }
     boolean canPlayOnSelectedDevice() { return ready && selected!=null && bluetoothOutputs().stream().anyMatch(d->d.getId()==selected.getId()); }
+    boolean isBusy() { return pending!=null; }
     boolean playOnSelectedDevice(String text) {
         if(!canPlayOnSelectedDevice())return false;
         synthesize(text,selected);return true;
@@ -98,6 +99,7 @@ final class EnglishPlayback implements AutoCloseable {
     }
     private void playPcm(Pending p) {
         AudioTrack track=null;
+        String finalMessage="English playback finished";
         AudioFocusRequest focus=new AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT).setAudioAttributes(ATTRIBUTES)
             .setOnAudioFocusChangeListener(change->{ if(change<0)main.post(()->fail(p.ticket,"Playback stopped for an audio interruption.")); },main).build();
         try {
@@ -140,11 +142,11 @@ final class EnglishPlayback implements AutoCloseable {
             }
             long deadline=SystemClock.elapsedRealtime()+1000;
             while(p.ticket==generation.get() && Integer.toUnsignedLong(track.getPlaybackHeadPosition())<writtenFrames && SystemClock.elapsedRealtime()<deadline)Thread.sleep(20);
-            notify(p.ticket,"English playback finished");
-        } catch(Exception e) { notify(p.ticket,e.getMessage()==null?"Playback failed":e.getMessage()); }
+        } catch(Exception e) { finalMessage=e.getMessage()==null?"Playback failed":e.getMessage(); }
         finally {
             if(track!=null){ if(playing==track)playing=null;try{track.pause();track.flush();}catch(IllegalStateException ignored){}track.release(); }
             audio.abandonAudioFocusRequest(focus);p.file.delete();if(pending==p)pending=null;
+            notify(p.ticket,finalMessage);
         }
     }
     private void notify(int ticket,String message) { main.post(()->{if(!closed && ticket==generation.get())status.accept(message);}); }

@@ -83,7 +83,7 @@ public final class MainActivity extends Activity {
         presentButton = button(resultPanel, "Show full screen", this::showTranslation);
         playbackButton = button(resultPanel, "Play English in glasses", () -> probe.stopThen(() -> playback.play(output.getText().toString())));
         playbackButton.setEnabled(hasResult && resultEnglish); presentButton.setEnabled(hasResult);
-        button(resultPanel, "Stop playback", () -> playback.stop());
+        button(resultPanel, "Stop playback", () -> {playback.stop();refreshWatch();});
         LinearLayout setup = disclosure(root, "Offline setup & glasses checks", false);
         label(setup, "Download both packs once on Wi-Fi: the translation pack here, then the speech model under Speak. After setup, recognition and translation run on your phone.", 16);
         button(setup, "Download translation language pack", this::download);
@@ -150,7 +150,7 @@ public final class MainActivity extends Activity {
         return "No speech turn is active on this screen.";
     }
     private void refreshWatch() {
-        if(watch!=null)watch.state(watchArmed&&ready,false,translating||launchingSpeech,watchArmed&&!translating&&!launchingSpeech&&hasResult&&resultEnglish&&playback.canPlayOnSelectedDevice(),
+        if(watch!=null)watch.state(watchArmed&&ready,false,translating||launchingSpeech||playback.isBusy(),watchArmed&&!translating&&!launchingSpeech&&hasResult&&resultEnglish&&playback.canPlayOnSelectedDevice(),
             watchArmed?status.getText().toString():"Enable watch controls on the phone under Offline setup.");
     }
     private GradientDrawable surface(int color) { GradientDrawable background = new GradientDrawable(); background.setColor(color); background.setCornerRadius(dp(18)); return background; }
