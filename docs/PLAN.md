@@ -10,7 +10,7 @@
 
 ## Sequence
 
-Update: 0.2 implements DAT PCM integration, manual bounded turns, Parakeet model installation/recognition, phone baseline and WAV import. Physical-device verification is still pending. Silero VAD, TTS, watch turn controls and performance optimization remain future work.
+Update: 0.3 adds Silero endpointing, offline English playback, acknowledged foreground watch controls, revised phone/watch UI and a cached recognizer to 0.2's spoken pipeline. Physical-device verification, further performance optimization and background capture remain pending. See TONIGHT_TEST.md.
 
 - **0.1 (this PR):** native projects, real typed offline translation, Bluetooth route/level diagnostic, watch result display, CI APKs.
 - **0.2:** Meta DAT 1.0 experimental PCM capture and permission/registration flow. Compare HFP and DAT with a partner at conversation distance. Confirm HSTN firmware and offline cold-start behavior.

@@ -35,6 +35,8 @@ final class EnglishPlayback implements AutoCloseable {
     }
     EnglishPlayback(Activity activity, Consumer<String> status) {
         this.activity=activity; this.status=status; audio=activity.getSystemService(AudioManager.class);
+        File[] leftovers=activity.getCacheDir().listFiles((directory,name)->name.startsWith("english-")&&name.endsWith(".wav"));
+        if(leftovers!=null)for(File file:leftovers)file.delete();
         tts=new TextToSpeech(activity.getApplicationContext(), result -> main.post(() -> ready=result==TextToSpeech.SUCCESS));
         tts.setOnUtteranceProgressListener(new UtteranceProgressListener() {
             private Pending current(String id) { Pending p=pending; return p!=null && id.equals(Integer.toString(p.ticket)) && p.ticket==generation.get()?p:null; }

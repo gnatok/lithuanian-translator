@@ -151,7 +151,7 @@ public final class MainActivity extends Activity {
     }
     private void refreshWatch() {
         if(watch!=null)watch.state(watchArmed&&ready,false,translating||launchingSpeech,watchArmed&&!translating&&!launchingSpeech&&hasResult&&resultEnglish&&playback.canPlayOnSelectedDevice(),
-            watchArmed?"Phone ready. Watch turns use your selected speech input.":"Enable watch controls on the phone under Offline setup.");
+            watchArmed?status.getText().toString():"Enable watch controls on the phone under Offline setup.");
     }
     private GradientDrawable surface(int color) { GradientDrawable background = new GradientDrawable(); background.setColor(color); background.setCornerRadius(dp(18)); return background; }
     private void styleChoice(Button view, boolean selected) {
@@ -198,10 +198,10 @@ public final class MainActivity extends Activity {
     private void translate() {
         playback.stop();
         String text = input.getText().toString().trim();
-        if (!ready) { status.setText("Download the offline pack first"); return; }
         if (text.isEmpty()) { input.setError("Enter a phrase"); return; }
         sourcePreview.setText((listening ? "Latest Lithuanian input" : "Latest English input") + "\n" + text);
         sourcePreview.setVisibility(View.VISIBLE);
+        if (!ready) { status.setText("Download the offline pack first"); return; }
         long ticket = gate.next(); boolean toEnglish = listening;
         status.setText("Translating locally…");
         translating=true;refreshWatch();

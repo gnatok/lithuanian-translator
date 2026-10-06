@@ -1,11 +1,13 @@
 package com.gnatok.translator.wear;
 
 import android.app.Activity;
+import android.app.Dialog;
 import android.graphics.Color;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.view.Gravity;
+import android.text.TextUtils;
 import android.widget.*;
 import com.google.android.gms.wearable.*;
 import java.nio.charset.StandardCharsets;
@@ -22,7 +24,9 @@ public final class MainActivity extends Activity implements DataClient.OnDataCha
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final Set<String> nodes = new HashSet<>();
     private TextView connection, result, resultTime, feedback;
-    private Button listen, reply, finish, cancel, play;
+    private Button listen, reply, finish, cancel, play, readFull;
+    private Dialog resultDialog;
+    private String latestText = "", latestLabel = "";
     private long latest, statusTime;
     private String phoneNode, pendingId, pendingNode;
     private boolean ready, recording, busy, canPlay, started, listenerReady;
@@ -49,15 +53,18 @@ public final class MainActivity extends Activity implements DataClient.OnDataCha
         int inset = dp(28); column.setPadding(inset, dp(34), inset, dp(40));
         text(column, "LT ↔ EN", 18, 0xff9ce6d4);
         connection = text(column, "Connecting to phone…", 12, 0xffc5cbd3);
+        feedback = text(column, "Controls use the audio source selected on your phone.", 12, 0xffc5cbd3);
         result = text(column, "Your latest translation appears here.", 23, Color.WHITE);
+        result.setMaxLines(4); result.setEllipsize(TextUtils.TruncateAt.END);
         result.setPadding(0, dp(12), 0, dp(4));
         resultTime = text(column, "No completed translation yet", 11, 0xffa7afbb);
+        readFull = button(column, "Read full translation", this::readFullResult);
+        readFull.setVisibility(android.view.View.GONE);
         listen = button(column, "Listen · LT → EN", () -> send("listen_lt"));
         reply = button(column, "Reply · EN → LT", () -> send("reply_en"));
         finish = button(column, "Finish & translate", () -> send("finish"));
         cancel = button(column, "Cancel turn", () -> send("cancel"));
         play = button(column, "Play English", () -> send("play"));
-        feedback = text(column, "Controls use the audio source selected on your phone.", 12, 0xffc5cbd3);
         scroll.addView(column); setContentView(scroll); render();
     }
 
@@ -73,6 +80,23 @@ public final class MainActivity extends Activity implements DataClient.OnDataCha
     }
     private int dp(int value) { return Math.round(value * getResources().getDisplayMetrics().density); }
 
+    private void readFullResult() {
+        if (latestText.isEmpty()) return;
+        // Freeze this result while reading; newer completed results remain available after closing.
+        resultDialog = new Dialog(this);
+        resultDialog.requestWindowFeature(android.view.Window.FEATURE_NO_TITLE);
+        LinearLayout sheet = new LinearLayout(this); sheet.setOrientation(LinearLayout.VERTICAL);
+        sheet.setPadding(dp(26), dp(32), dp(26), dp(28)); sheet.setBackgroundColor(Color.BLACK);
+        ScrollView scroll = new ScrollView(this);
+        LinearLayout contents = new LinearLayout(this); contents.setOrientation(LinearLayout.VERTICAL);
+        text(contents, latestLabel, 11, 0xffa7afbb);
+        text(contents, latestText, 23, Color.WHITE);
+        scroll.addView(contents); sheet.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
+        button(sheet, "Close", () -> resultDialog.dismiss());
+        resultDialog.setContentView(sheet); resultDialog.show();
+        if (resultDialog.getWindow() != null) resultDialog.getWindow().setLayout(-1, -1);
+    }
+
     @Override public void onStart() {
         super.onStart(); started = true;
         listenerReady = false;
@@ -86,6 +110,7 @@ public final class MainActivity extends Activity implements DataClient.OnDataCha
         handler.post(refresh);
     }
     @Override public void onStop() {
+        if (resultDialog != null) resultDialog.dismiss();
         started = false; listenerReady = false; handler.removeCallbacks(refresh); handler.removeCallbacks(timeout);
         if (pendingId != null) feedback.setText("Command confirmation interrupted. Check the phone.");
         pendingId = null; pendingNode = null;
@@ -109,8 +134,9 @@ public final class MainActivity extends Activity implements DataClient.OnDataCha
             render(); return;
         }
         if (data.getLong("time") < latest) return;
-        latest = data.getLong("time"); result.setText(data.getString("text", ""));
-        resultTime.setText(data.getString("language", "") + " · Last result\n" + DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(new Date(latest)));
+        latest = data.getLong("time"); latestText = data.getString("text", ""); result.setText(latestText);
+        latestLabel = data.getString("language", "") + " · Last result\n" + DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(new Date(latest));
+        resultTime.setText(latestLabel); readFull.setVisibility(latestText.isEmpty() ? android.view.View.GONE : android.view.View.VISIBLE);
     }
     private boolean fresh() {
         long age = System.currentTimeMillis() - statusTime;
@@ -121,7 +147,7 @@ public final class MainActivity extends Activity implements DataClient.OnDataCha
         connection.setText(nodes.isEmpty() ? "Phone disconnected · showing last result" : !live ? "Open the app on your phone · status expired" : phoneMessage);
         listen.setEnabled(live && idle && ready && !recording && !busy);
         reply.setEnabled(live && idle && ready && !recording && !busy);
-        finish.setEnabled(live && idle && recording); cancel.setEnabled(live && idle && (recording || busy));
+        finish.setEnabled(live && idle && ready && recording); cancel.setEnabled(live && idle && ready && (recording || busy));
         play.setEnabled(live && idle && canPlay && !recording && !busy);
         finish.setVisibility(recording ? android.view.View.VISIBLE : android.view.View.GONE);
         cancel.setVisibility(recording || busy ? android.view.View.VISIBLE : android.view.View.GONE);

@@ -2,7 +2,7 @@
 
 Android phone and Wear OS companion for conversations in Lithuania using Oakley Meta HSTN. **Lithuanian speech → English is the primary core feature; English speech → large Lithuanian text is also core.**
 
-## Current milestone: 0.2 spoken POC
+## Current milestone: 0.3 conversation POC
 
 Implemented:
 - On-device **typed** Lithuanian ↔ English translation using ML Kit. Download the language pack explicitly over Wi-Fi, then translate offline.
@@ -14,7 +14,16 @@ Implemented:
 - Experimental Meta DAT 1.0 PCM capture with registration and camera/microphone permission flow. Camera streaming is active for PCM; video is discarded.
 - Explicit phone-microphone baseline and WAV import (16 kHz mono PCM16, 0.25–20 seconds). Manual Finish, 20-second audio cap, interruption/cancellation handling and no saved audio.
 
-**Not implemented yet:** speech playback, automatic voice activity detection, watch recording controls or hardware model benchmarks. Recognition and experimental DAT integration are implemented but have not been executed on the target devices. HFP is still diagnostic-only; spoken input uses DAT, the explicitly selected phone microphone, or a WAV file.
+New in 0.3:
+- Clear Listen/Reply phone controls, visible source transcript, foldable split layout and full-screen Lithuanian presentation.
+- Optional Silero pause detection: ≥250 ms of speech followed by one second of silence ends a turn. Manual Finish remains available.
+- Offline English playback to a selected Bluetooth media output, with route verification, interruption handling and no intentional phone-speaker fallback.
+- Watch turn/finish/cancel/playback commands with correlated acknowledgments, expiry, duplicate protection and explicit phone arming. The phone must remain foreground; no background listening.
+- Cached Parakeet engine across turns, serialized native access and memory-pressure cleanup.
+
+**Still pending:** physical-device model/firmware/accuracy benchmarks, background capture, optional Lithuanian speech playback and camera OCR. Recognition and experimental DAT integration have not been executed on the target devices. HFP remains diagnostic-only.
+
+Use [tonight's test guide](docs/TONIGHT_TEST.md) for the shortest useful device session. [Architecture notes](docs/ARCHITECTURE.md) document resource ownership and runtime limits.
 
 ### Try speech
 
@@ -22,7 +31,9 @@ Download the translation pack on the main screen, choose LT → EN or EN → LT,
 
 For glasses, enable Developer Mode in Meta AI, connect this app to Meta AI, grant glasses camera/microphone access and tap **Start glasses turn**. Registration needs internet; runtime offline behavior depends on SDK/firmware and must be tested. This development build uses Meta application ID/token `0` and callback scheme `lttranslator`. If Developer Mode still requires project configuration for your account, use your Wearables Developer Center settings; do not commit credentials.
 
-For a test without glasses, explicitly select **PHONE microphone baseline** or import a WAV. Tap **Finish turn and translate**; the recognized transcript returns to the main screen and feeds the selected translation direction. Leaving the speech screen cancels capture/download/recognition results. Each turn verifies and loads the model, then releases it: first-pass latency is deliberately not optimized. Native inference cannot be interrupted midway; canceled results are discarded and subsequent model work is serialized across speech screens.
+For a test without glasses, explicitly select **Phone microphone • comparison test** or import a WAV. Tap **Finish and translate**; the recognized transcript returns to the main screen and feeds the selected translation direction. Leaving the speech screen cancels capture/download/recognition results. Model hashes are verified on first use or file change; one recognizer stays cached while memory permits. Native inference cannot be interrupted midway; canceled results are discarded and subsequent model work waits for it to finish.
+
+The speech download also installs Silero (~644 KB). Existing 0.2 installs can use **Download / repair pause detection only**. Disable automatic finishing for manual comparisons. For English playback, install an offline Android English voice and select the glasses output on the phone before using the watch Play control. Android audio routes are asynchronous; actual disconnect behavior must be checked on your devices.
 
 ## Install
 

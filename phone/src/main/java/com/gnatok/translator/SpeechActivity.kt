@@ -67,12 +67,12 @@ class SpeechActivity : ComponentActivity() {
         status = text(if (models.installed()) "Speech model installed. Ready for a short turn." else "Speech model needs a one-time download (about 670 MB).")
         status.accessibilityLiveRegion = android.view.View.ACCESSIBILITY_LIVE_REGION_POLITE
         sourceChoice = RadioGroup(this).apply {
-            addView(RadioButton(this@SpeechActivity).apply { id=1; text="Glasses • Meta PCM" })
-            addView(RadioButton(this@SpeechActivity).apply { id=2; text="Phone microphone • comparison test" })
-            check(if(phoneSource)2 else 1)
+            addView(RadioButton(this@SpeechActivity).apply { id=R.id.source_glasses; text="Glasses • Meta PCM" })
+            addView(RadioButton(this@SpeechActivity).apply { id=R.id.source_phone; text="Phone microphone • comparison test" })
+            check(if(phoneSource)R.id.source_phone else R.id.source_glasses)
             setOnCheckedChangeListener { _, id ->
-                if(recording || working) { if((id==2)!=phoneSource) check(if(phoneSource)2 else 1) }
-                else { phoneSource=id==2;getPreferences(MODE_PRIVATE).edit().putBoolean("phoneSource",phoneSource).apply();publishWatch() }
+                if(recording || working) { if((id==R.id.source_phone)!=phoneSource) check(if(phoneSource)R.id.source_phone else R.id.source_glasses) }
+                else { phoneSource=id==R.id.source_phone;getPreferences(MODE_PRIVATE).edit().putBoolean("phoneSource",phoneSource).apply();publishWatch() }
             }
         };column.addView(sourceChoice)
         column.addView(Switch(this).apply { text="Auto-finish after a pause • applies to next turn";isChecked=true;setOnCheckedChangeListener { _, value -> autoFinish=value } })
@@ -125,7 +125,7 @@ class SpeechActivity : ComponentActivity() {
     }
     private fun startTurn(phone: Boolean) {
         if (working || recording || !permissionsGranted(!phone)) return
-        if (!models.installed()) { status.text = "Download the speech model first."; return }
+        if (!models.installed()) { status.text = "Download the speech model first.";publishWatch();return }
         recording = true; generation++; val ticket = generation
         publishWatch()
         val buffer = PcmTurn(); turn = buffer
@@ -212,7 +212,7 @@ class SpeechActivity : ComponentActivity() {
         window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
     }
     private fun publishWatch() { if(::watch.isInitialized) watch.state(watchArmed,recording,working,false,
-        if(watchArmed) "${if(phoneSource) "Phone baseline" else "Glasses"} • ${if(recording) "Listening" else if(working) "Processing" else "Ready"}" else "Enable watch controls on the phone.") }
+        if(watchArmed) "${if(phoneSource) "Phone baseline" else "Glasses"} • ${if(recording) "Listening" else if(working) "Processing" else status.text}" else "Enable watch controls on the phone.") }
     private fun watchCommand(action: String): String? {
         if(action=="cancel") { cancelWork();status.text="Canceled from watch";return null }
         if(action=="finish") { if(!recording)return "No turn is recording";finishTurn();return null }

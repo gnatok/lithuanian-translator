@@ -34,7 +34,7 @@ Optional: the main screen's Bluetooth microphone check is a separate HFP diagnos
 
 ## 4. Automatic finishing and playback
 
-1. Enable **Finish automatically after a pause** before starting a new turn. Say a sentence, then stay silent for about one second. Expect capture to end and translation to begin. If the pause detector is not installed, use manual Finish.
+1. Enable **Auto-finish after a pause** before starting a new turn. Say a sentence, then stay silent for about one second. Expect capture to end and translation to begin. If the pause detector is not installed, use manual Finish.
 2. Try a short natural pause within a sentence. Note premature endings, missed endings and behavior with nearby background speech. Turns are bounded to 20 seconds of captured audio.
 3. Produce an English translation, then choose **Play English in glasses** on the phone and select HSTN. Confirm audio physically comes from the glasses. Playback requires an installed offline English voice.
 4. Check **Stop playback**. Start another speech turn and confirm playback has stopped. With a harmless test sentence, disconnect the glasses during playback and note where audio stops or is heard; Android route changes need physical validation.

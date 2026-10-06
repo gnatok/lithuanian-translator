@@ -13,12 +13,18 @@ final class WatchBridge implements MessageClient.OnMessageReceivedListener {
     private final Context context;private final Commands commands;
     private final Handler main=new Handler(Looper.getMainLooper());
     private static final LinkedHashMap<String,String> replies=new LinkedHashMap<>();
-    private boolean active,ready,recording,busy,canPlay;
+    private boolean active,requested,ready,recording,busy,canPlay;
     private String message="Open the speech screen on your phone.";
     WatchBridge(Context context,Commands commands){this.context=context;this.commands=commands;}
     private final Runnable heartbeat=new Runnable(){@Override public void run(){if(active){publish();main.postDelayed(this,5000);}}};
-    void start(){if(active)return;active=true;Wearable.getMessageClient(context).addListener(this);main.post(heartbeat);}
-    void stop(){active=false;main.removeCallbacks(heartbeat);Wearable.getMessageClient(context).removeListener(this);ready=false;canPlay=false;message="Phone app is not active. Open it to continue.";publish();}
+    void start(){
+        if(requested)return;requested=true;
+        Wearable.getMessageClient(context).addListener(this).addOnSuccessListener(unused->{
+            if(!requested){Wearable.getMessageClient(context).removeListener(this);return;}
+            active=true;main.removeCallbacks(heartbeat);main.post(heartbeat);
+        }).addOnFailureListener(error->{active=false;requested=false;message="Watch controls unavailable; reopen the phone app.";publish();});
+    }
+    void stop(){requested=false;active=false;main.removeCallbacks(heartbeat);Wearable.getMessageClient(context).removeListener(this);ready=false;canPlay=false;message="Phone app is not active. Open it to continue.";publish();}
     void state(boolean ready,boolean recording,boolean busy,boolean canPlay,String message){this.ready=ready;this.recording=recording;this.busy=busy;this.canPlay=canPlay;this.message=message;if(active)publish();}
     private void publish(){
         PutDataMapRequest item=PutDataMapRequest.create("/translation/status");DataMap map=item.getDataMap();
