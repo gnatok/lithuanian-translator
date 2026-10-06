@@ -1,0 +1,28 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <queries><intent><action android:name="android.intent.action.TTS_SERVICE" /></intent></queries>
+    <application android:name=".TranslatorApplication" android:label="LT ↔ EN" android:theme="@android:style/Theme.Material.Light.NoActionBar" android:allowBackup="false" android:supportsRtl="true">
+        <activity android:name=".DebugActivity" android:exported="false" />
+        <meta-data android:name="com.meta.wearable.mwdat.APPLICATION_ID" android:value="0" />
+        <meta-data android:name="com.meta.wearable.mwdat.CLIENT_TOKEN" android:value="0" />
+        <activity android:name=".ConversationActivity" android:exported="false" android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout" />
+        <activity android:name=".SpeechActivity" android:launchMode="singleTop" android:exported="false" android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout" />
+        <activity android:name=".OnboardingActivity" android:launchMode="singleTop" android:exported="true" android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="lttranslator" />
+            </intent-filter>
+        </activity>
+        <activity android:name=".MainActivity" android:exported="true" android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout">
+            <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+        </activity>
+    </application>
+</manifest>
