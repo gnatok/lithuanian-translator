@@ -11,6 +11,7 @@ import java.util.Date;
 /** Displays explicitly timestamped completed results, including cached offline results. */
 public final class MainActivity extends Activity implements DataClient.OnDataChangedListener {
     private TextView result;
+    private long latest;
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
         ScrollView scroll = new ScrollView(this);
@@ -22,7 +23,7 @@ public final class MainActivity extends Activity implements DataClient.OnDataCha
     }
     @Override public void onStart() {
         super.onStart(); Wearable.getDataClient(this).addListener(this);
-        Wearable.getDataClient(this).getDataItems().addOnSuccessListener(this, items -> {
+        Wearable.getDataClient(this).getDataItems().addOnSuccessListener(items -> {
             try { for (DataItem item : items) show(item); } finally { items.release(); }
         }).addOnFailureListener(this, e -> result.setText("Phone sync unavailable. Open the companion app on your phone."));
     }
@@ -31,6 +32,8 @@ public final class MainActivity extends Activity implements DataClient.OnDataCha
     private void show(DataItem item) {
         if (!"/translation/latest".equals(item.getUri().getPath())) return;
         DataMap data = DataMapItem.fromDataItem(item).getDataMap();
+        if (data.getLong("time") < latest) return;
+        latest = data.getLong("time");
         String time = DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(new Date(data.getLong("time")));
         result.setText(data.getString("language") + "\n\n" + data.getString("text") + "\n\nLast result • " + time);
     }

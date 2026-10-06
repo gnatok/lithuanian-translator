@@ -1,6 +1,7 @@
 package com.gnatok.translator;
 
 import android.content.Context;
+import android.annotation.SuppressLint;
 import android.media.*;
 import android.os.Handler;
 import android.os.Looper;
@@ -16,14 +17,18 @@ final class AudioProbe implements AutoCloseable {
     private final Handler main = new Handler(Looper.getMainLooper());
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
     private volatile boolean running;
+    private volatile boolean busy;
     private volatile int generation;
     AudioProbe(Context context) { manager = context.getSystemService(AudioManager.class); }
+    @SuppressLint("MissingPermission") // MainActivity checks BLUETOOTH_CONNECT before calling.
     List<AudioDeviceInfo> devices() {
         return manager.getAvailableCommunicationDevices().stream()
             .filter(d -> d.getType() == AudioDeviceInfo.TYPE_BLUETOOTH_SCO || d.getType() == AudioDeviceInfo.TYPE_BLE_HEADSET).collect(java.util.stream.Collectors.toList());
     }
+    @SuppressLint("MissingPermission") // MainActivity gates both RECORD_AUDIO and BLUETOOTH_CONNECT; revocation is caught below.
     void start(AudioDeviceInfo selected, Consumer<String> report) {
-        if (running) return;
+        if (busy) { report.accept("Previous microphone session is active or stopping. Try again shortly."); return; }
+        busy = true;
         running = true;
         final int ticket = ++generation;
         worker.execute(() -> {
@@ -66,6 +71,7 @@ final class AudioProbe implements AutoCloseable {
                 if (recorder != null) { try { recorder.stop(); } catch (IllegalStateException ignored) {} recorder.release(); }
                 try { manager.clearCommunicationDevice(); if (previousDevice != null) manager.setCommunicationDevice(previousDevice); manager.setMode(previousMode); } catch (RuntimeException ignored) {}
                 running = false;
+                busy = false;
             }
         });
     }

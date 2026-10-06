@@ -27,13 +27,13 @@ The watch needs its normal companion pairing and Google Play services. Wear OS D
 
 ## Local build
 
-Install JDK 17, Gradle 8.13 and Android SDK platform 36/build tools 35.0.0. Set `ANDROID_HOME` or untracked `local.properties` with `sdk.dir=...`.
+Install JDK 17 and Android SDK platform 36/build tools 35.0.0. Set `ANDROID_HOME` or untracked `local.properties` with `sdk.dir=...`. The wrapper downloads pinned Gradle 8.13 with SHA-256 verification.
 
 ```sh
-gradle :core:test :phone:lintDebug :wear:lintDebug :phone:assembleDebug :wear:assembleDebug
+./gradlew :core:test :phone:lintDebug :wear:lintDebug :phone:assembleDebug :wear:assembleDebug
 adb install phone/build/outputs/apk/debug/phone-debug.apk
 ```
 
-The initial milestone has no Gradle wrapper; CI installs the pinned Gradle version. Do not commit models, account tokens, recordings or production signing keys.
+Do not commit models, account tokens, recordings or production signing keys.
 
 See [implementation plan](docs/PLAN.md). Target devices: Galaxy Z Fold8, Galaxy Watch Ultra2, Oakley Meta HSTN. Physical compatibility and performance are unverified.
