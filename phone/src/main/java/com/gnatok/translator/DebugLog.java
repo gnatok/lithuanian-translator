@@ -94,7 +94,7 @@ public final class DebugLog {
             .append("\nDevice: ").append(Build.MANUFACTURER).append(' ').append(Build.MODEL).append(" / Android ").append(Build.VERSION.RELEASE).append(" / API ").append(Build.VERSION.SDK_INT)
             .append("\nSession: ").append(session).append(" / turn: ").append(turn).append("\nLast stage: ").append(lastStage).append("\nLast exception: ").append(lastError);
         for(String permission:new String[]{"android.permission.RECORD_AUDIO","android.permission.BLUETOOTH_CONNECT","android.permission.CAMERA"})
-            text.append("\n").append(permission).append(" = ").append(context.checkSelfPermission(permission)==0?"granted":"denied");
+            text.append("\n").append(permission).append(" = ").append(context.checkSelfPermission(permission)==android.content.pm.PackageManager.PERMISSION_GRANTED?"granted":"denied");
         try{
             ConnectivityManager manager=context.getSystemService(ConnectivityManager.class);NetworkCapabilities caps=manager.getNetworkCapabilities(manager.getActiveNetwork());
             text.append("\nNetwork: ").append(caps==null?"none":"wifi="+caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)+" cellular="+caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)+" validated="+caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED));

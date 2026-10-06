@@ -4,7 +4,7 @@ android {
     compileSdk = 36
     buildFeatures { buildConfig = true }
     defaultConfig {
-        applicationId = "com.gnatok.translator"; minSdk = 31; targetSdk = 36; versionCode = 4; versionName = "0.3.1-debug"
+        applicationId = "com.gnatok.translator"; minSdk = 31; targetSdk = 36; versionCode = 5; versionName = "0.4.0-conversation"
         buildConfigField("String", "GIT_SHA", "\"${System.getenv("GITHUB_SHA")?.take(12) ?: "local"}\"")
         ndk { abiFilters += "arm64-v8a" }
     }
@@ -18,5 +18,6 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.10.0")
     implementation("com.meta.wearable:mwdat-core:1.0.0")
     implementation("com.meta.wearable:mwdat-camera:1.0.0")
+    implementation("com.meta.wearable:mwdat-inputs:1.0.0")
     implementation(files("libs/sherpa-onnx-1.13.8.aar"))
 }

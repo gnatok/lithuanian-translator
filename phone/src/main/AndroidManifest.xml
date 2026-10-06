@@ -11,7 +11,9 @@
         <activity android:name=".DebugActivity" android:exported="false" />
         <meta-data android:name="com.meta.wearable.mwdat.APPLICATION_ID" android:value="0" />
         <meta-data android:name="com.meta.wearable.mwdat.CLIENT_TOKEN" android:value="0" />
-        <activity android:name=".SpeechActivity" android:launchMode="singleTop" android:exported="true" android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout">
+        <activity android:name=".ConversationActivity" android:exported="false" android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout" />
+        <activity android:name=".SpeechActivity" android:launchMode="singleTop" android:exported="false" android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout" />
+        <activity android:name=".OnboardingActivity" android:launchMode="singleTop" android:exported="true" android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout">
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />

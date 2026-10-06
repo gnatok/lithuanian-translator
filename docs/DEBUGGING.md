@@ -6,4 +6,4 @@ The report includes build/device details, permissions, memory/storage, network s
 
 Logs remain in private app storage across restarts, rotating through approximately 3 MB. Clear removes local history. Export is manual; nothing is uploaded automatically. Native process kills may not produce a Java crash event.
 
-This build instruments the existing turn-based flow. Glasses-tap activation, the requested three-second silence interval, automatic playback and interruption by new speech are separate work; instrumentation does not establish that those features work on hardware.
+The conversation screen adds an experimental foreground loop: armed glasses touch → Lithuanian capture → three seconds of silence → local recognition/translation → English playback → next capture. Inputs must be available for the app and the glasses; frame-touch activation is not a cold launch. Capture pauses during recognition and playback, so interruption by new speech is not yet supported. Hardware behavior still needs verification.

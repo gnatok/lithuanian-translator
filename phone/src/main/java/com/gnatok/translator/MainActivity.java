@@ -52,14 +52,21 @@ public final class MainActivity extends Activity {
         scroll.addView(root); setContentView(scroll);
         // Respect status/navigation bars on Android 15+ edge-to-edge.
         scroll.setOnApplyWindowInsetsListener((v, insets) -> { android.graphics.Insets bars = insets.getInsets(WindowInsets.Type.systemBars()); v.setPadding(bars.left, bars.top, bars.right, bars.bottom); return insets; });
-        label(root, "LT ↔ EN  /  CONVERSATION", 14).setTypeface(null, Typeface.BOLD);
-        label(root, "Understand. Then reply.", 28).setTypeface(null, Typeface.BOLD);
-        button(root, "Debug timeline / export report", () -> startActivity(new Intent(this, DebugActivity.class)));
+        label(root, "LIETUVIŲ → ENGLISH", 14).setTypeface(null, Typeface.BOLD);
+        label(root, "Follow the conversation.", 30).setTypeface(null, Typeface.BOLD);
+        label(root, "Listen through your glasses and read English on your phone. Keep this app open while translating.", 18);
+        Button continuous = button(root, "Start translation", () -> {
+            playback.stop(); gate.next(); translating=false;
+            probe.stopThen(() -> startActivity(new Intent().setClassName(this, "com.gnatok.translator.ConversationActivity")));
+        });
+        continuous.setMinHeight(dp(72)); continuous.setTextSize(22); styleChoice(continuous, true);
+        button(root, "Setup · glasses, permissions & downloads", () -> startActivity(new Intent(this, OnboardingActivity.class)));
         status = label(root, "Checking offline language pack…", 16);
         status.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);
         playback = new EnglishPlayback(this, message -> { status.setText(message); refreshWatch(); });
         watch = new WatchBridge(this, this::watchCommand);
-        workspace = new LinearLayout(this); workspace.setOrientation(LinearLayout.VERTICAL); root.addView(workspace);
+        LinearLayout manual = disclosure(root, "Reply in Lithuanian / translate one phrase", hasResult);
+        workspace = new LinearLayout(this); workspace.setOrientation(LinearLayout.VERTICAL); manual.addView(workspace);
         conversation = new LinearLayout(this); conversation.setOrientation(LinearLayout.VERTICAL); conversation.setPadding(0, 0, dp(12), dp(12)); workspace.addView(conversation);
         label(conversation, "1  CHOOSE WHO IS SPEAKING", 13).setTypeface(null, Typeface.BOLD);
         listenButton = button(conversation, "Listen  ·  Lithuanian → English", () -> selectDirection(true));
@@ -87,6 +94,7 @@ public final class MainActivity extends Activity {
         playbackButton.setEnabled(hasResult && resultEnglish); presentButton.setEnabled(hasResult);
         button(resultPanel, "Stop playback", () -> {playback.stop();refreshWatch();});
         LinearLayout setup = disclosure(root, "Offline setup & glasses checks", false);
+        button(setup, "Debug timeline / export report", () -> startActivity(new Intent(this, DebugActivity.class)));
         label(setup, "Download both packs once on Wi-Fi: the translation pack here, then the speech model under Speak. After setup, recognition and translation run on your phone.", 16);
         button(setup, "Download translation language pack", this::download);
         button(setup, "Open speech setup & glasses connection", this::openSpeechSetup);
@@ -111,6 +119,8 @@ public final class MainActivity extends Activity {
         conversation.setLayoutParams(new LinearLayout.LayoutParams(-1, -2)); resultPanel.setLayoutParams(new LinearLayout.LayoutParams(-1, -2));
         if (saved != null) input.setText(saved.getString("input", ""));
         refreshDirection(); checkModels();
+        if (saved == null && !getSharedPreferences("onboarding", MODE_PRIVATE).getBoolean("seen", false))
+            startActivity(new Intent(this, OnboardingActivity.class));
     }
     private Translator translator(String source, String target) { return Translation.getClient(new TranslatorOptions.Builder().setSourceLanguage(source).setTargetLanguage(target).build()); }
     private void refreshDirection() {

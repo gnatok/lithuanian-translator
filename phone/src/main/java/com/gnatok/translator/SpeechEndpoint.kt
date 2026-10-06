@@ -91,7 +91,7 @@ internal object VadModels {
     }
 }
 
-/** One detector per turn. An endpoint requires real speech followed by one second of silence.
+/** One detector per turn. An endpoint requires real speech followed by three seconds of silence.
  * PCM remains untouched: PcmTurn owns the complete recording, including the trailing silence.
  * Call accept off the main thread. Never share one instance between separate capture sources.
  */
@@ -100,6 +100,7 @@ internal class SpeechEndpoint private constructor(private val vad: Vad) : Closea
     private var used = 0
     private var ended = false
     private var closed = false
+    private var speechEver = false
 
     @Synchronized
     fun accept(samples: FloatArray): Boolean {
@@ -111,10 +112,15 @@ internal class SpeechEndpoint private constructor(private val vad: Vad) : Closea
             if (used == window.size) {
                 vad.acceptWaveform(window)
                 used = 0
+                val complete = !vad.empty()
+                if (!speechEver && (complete || vad.isSpeechDetected())) {
+                    speechEver = true
+                    DebugLog.event("vad.speech_onset", "native detector confirmed speech")
+                }
                 // Silero emits a completed segment only after minSpeechDuration and minSilenceDuration.
-                if (!vad.empty()) {
+                if (complete) {
                     ended = true
-                    DebugLog.event("vad.endpoint", "speech followed by configured 1000ms silence")
+                    DebugLog.event("vad.endpoint", "completed speech segment minSilenceMs=3000")
                     vad.clear()
                     return true
                 }
@@ -129,6 +135,17 @@ internal class SpeechEndpoint private constructor(private val vad: Vad) : Closea
         require(bytes.remaining() % 2 == 0) { "Incomplete PCM16 sample" }
         return accept(FloatArray(bytes.remaining() / 2) { bytes.short / 32768f })
     }
+
+    /** Detector state after the last complete 512-sample window; not a speaker identity signal. */
+    @Synchronized
+    fun isSpeechDetected(): Boolean {
+        check(!closed) { "Speech detector is closed" }
+        return !ended && vad.isSpeechDetected()
+    }
+
+    /** Latched native speech evidence for discarding capped all-silence turns without running ASR. */
+    @Synchronized
+    fun hasSpeechEver(): Boolean = speechEver
 
     @Synchronized
     override fun close() {
@@ -146,11 +163,11 @@ internal class SpeechEndpoint private constructor(private val vad: Vad) : Closea
                 return withContext(Dispatchers.IO) {
                     val model = VadModels.verifiedPath(context)
                     currentCoroutineContext().ensureActive()
-                    DebugLog.event("vad.initialize", "sampleRate=16000 threshold=0.5 minSpeechMs=250 minSilenceMs=1000 window=512 threads=1")
+                    DebugLog.event("vad.initialize", "sampleRate=16000 threshold=0.5 minSpeechMs=250 minSilenceMs=3000 window=512 threads=1")
                     SpeechEndpoint(Vad(config = VadModelConfig(
                         sileroVadModelConfig = SileroVadModelConfig(
                             model = model, threshold = 0.5f, minSpeechDuration = 0.25f,
-                            minSilenceDuration = 1.0f, windowSize = 512,
+                            minSilenceDuration = 3.0f, windowSize = 512,
                             // PcmTurn enforces its own 20-second limit; do not split a speaking turn here.
                             maxSpeechDuration = 30.0f
                         ), sampleRate = 16000, numThreads = 1, provider = "cpu"
