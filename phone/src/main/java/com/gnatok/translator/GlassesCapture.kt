@@ -107,16 +107,22 @@ internal class GlassesCapture(private val activity: ComponentActivity, private v
         val parent = SupervisorJob(sessionJob)
         inputsJob = parent
         val scope = CoroutineScope(parent + Dispatchers.Main.immediate)
+        val activation = CompletableDeferred<Unit>()
         scope.launch {
             var activated = false
             controls.state.collect { state ->
                 DebugLog.event("meta.inputs.state", "$state")
-                if (state == InputsState.ACTIVE) activated = true
+                if (state == InputsState.ACTIVE) { activated = true; activation.complete(Unit) }
                 if (activated && state == InputsState.INACTIVE) failed("Glasses touch controls disconnected. Stop and re-arm the session.")
             }
         }
         scope.launch { controls.errors.collect { error ->
-            error?.let { DebugLog.event("meta.inputs.error", it.description); failed("Glasses touch controls: ${it.description}") }
+            error?.let {
+                DebugLog.event("meta.inputs.error", it.description)
+                val message = "Glasses touch controls: ${it.description}"
+                if (!activation.isCompleted) activation.completeExceptionally(IllegalStateException(message))
+                else failed(message)
+            }
         } }
         scope.launch {
             var lastTap = 0L
@@ -132,7 +138,15 @@ internal class GlassesCapture(private val activity: ComponentActivity, private v
                 }
             }
         }
-        withTimeout(10000) { controls.state.first { it == InputsState.ACTIVE } }
+        try { withTimeout(10000) { activation.await() } }
+        catch (error: Throwable) {
+            withContext(NonCancellable) {
+                parent.cancelAndJoin(); inputsJob = null
+                runCatching { current.removeInputs() }
+                inputs = null
+            }
+            throw error
+        }
         DebugLog.event("meta.inputs.armed", "CAPTOUCH Select toggles conversation; Back stops")
     }
 
@@ -211,14 +225,17 @@ internal class GlassesCapture(private val activity: ComponentActivity, private v
     }
     suspend fun stop() = operations.withLock {
         DebugLog.event("meta.session.stop", "full teardown")
-        try { stopCaptureLocked() } finally {
+        try { stopCaptureLocked() } finally { withContext(NonCancellable) {
+            // A canceled caller must still release every native capability and the session.
+            runCatching { camera?.stop() }
+            camera = null
             inputsJob?.cancelAndJoin(); inputsJob = null
             if (inputs != null) runCatching { session?.removeInputs()?.onFailure { error, _ -> DebugLog.event("meta.inputs.remove.error", error.description) } }
             inputs = null
             sessionJob?.cancelAndJoin(); sessionJob = null
             sessionFailure = null
             try { session?.stop() } finally { session = null }
-        }
+        } }
     }
     fun close() {
         DebugLog.event("meta.capture.close", "activity destroyed")
