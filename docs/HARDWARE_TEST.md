@@ -20,4 +20,13 @@ Record commit/build run, OS versions, glasses firmware and connection state. No 
 
 ## Later spoken POC acceptance
 
+The 0.2 speech path is ready for these tests after a successful build:
+
+1. Download both packs online, then use a short English WAV/phone-mic turn. Check the displayed transcript before assessing translation.
+2. Repeat with Lithuanian speech, including `Laba diena. Kur yra autobusų stotis?`. Test both directions after restarting in airplane mode.
+3. Register with Meta AI online in Developer Mode; grant camera/microphone access. Test a glasses turn with wearer speech, then the other speaker at one metre. Confirm the glasses recording indicator. Video is discarded.
+4. Compare DAT transcription against the phone-mic baseline. This build does not yet transcribe HFP.
+5. Test Finish, Cancel, 20-second limit, glasses disconnect, backgrounding and permission denial. No partial/old turn should replace the final translation. A missing PCM stream must report a timeout.
+6. Import wrong-rate, stereo and truncated WAV files: clear errors, no inference. Cancel a download and restart it: verified complete files are reused.
+
 Both speech directions must work from glasses through local recognition and translation in airplane mode after setup. Measure time to final result, transcription/translation errors, RAM and thermal behavior in quiet/noisy samples. Preserve final output on interruption. English playback must verify glasses routing and pause capture. Lithuanian playback is optional.

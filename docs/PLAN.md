@@ -10,6 +10,8 @@
 
 ## Sequence
 
+Update: 0.2 implements DAT PCM integration, manual bounded turns, Parakeet model installation/recognition, phone baseline and WAV import. Physical-device verification is still pending. Silero VAD, TTS, watch turn controls and performance optimization remain future work.
+
 - **0.1 (this PR):** native projects, real typed offline translation, Bluetooth route/level diagnostic, watch result display, CI APKs.
 - **0.2:** Meta DAT 1.0 experimental PCM capture and permission/registration flow. Compare HFP and DAT with a partner at conversation distance. Confirm HSTN firmware and offline cold-start behavior.
 - **0.3:** Parakeet TDT 0.6B V3 INT8 via sherpa-onnx, Silero VAD, bounded utterance buffers and explicit integrity-checked model installation. Parakeet recognizes speech; ML Kit translates the transcript. Measure memory and thermal behavior.

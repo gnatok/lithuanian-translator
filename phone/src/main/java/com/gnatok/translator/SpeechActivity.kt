@@ -35,7 +35,7 @@ class SpeechActivity : ComponentActivity() {
     private var microphone: Job? = null
     private var timer: Job? = null
     // Native decode is not interruptible. Serialize canceled and subsequent turns until release finishes.
-    private val inference = Mutex()
+    companion object { private val inference = Mutex() }
     private val picker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) beginWork {
             val samples = withContext(Dispatchers.IO) { contentResolver.openInputStream(uri)!!.use { WavReader.read(it) } }
@@ -62,7 +62,8 @@ class SpeechActivity : ComponentActivity() {
             AlertDialog.Builder(this).setTitle("Download offline speech model?")
                 .setMessage("About 670 MB over unmetered Wi-Fi. Keep this screen open. Verified completed files are reused after interruption; an incomplete file restarts.")
                 .setPositiveButton("Download") { _, _ -> beginWork {
-                    withContext(Dispatchers.IO) { models.install { message -> report(message) } }
+                    val ticket = generation
+                    withContext(Dispatchers.IO) { inference.withLock { models.install { message -> report(message, ticket) } } }
                     status.text = "Speech model ready. Download the translation pack on the main screen too."
                 } }.setNegativeButton("Cancel", null).show()
         }
@@ -76,12 +77,13 @@ class SpeechActivity : ComponentActivity() {
         button("Cancel current work") { cancelWork(); status.text = "Canceled. No audio retained." }
         text("Recognition runs on this phone. Direction is chosen on the previous screen; the transcript is shown there before the translated result. First-turn model loading may be slow. TTS and automatic voice activity detection are not enabled yet.", 16f)
     }
-    private fun permissionsGranted(): Boolean {
-        val required = arrayOf(Manifest.permission.RECORD_AUDIO, Manifest.permission.BLUETOOTH_CONNECT, Manifest.permission.CAMERA)
+    private fun permissionsGranted(forGlasses: Boolean = true): Boolean {
+        val required = if (forGlasses) arrayOf(Manifest.permission.RECORD_AUDIO, Manifest.permission.BLUETOOTH_CONNECT, Manifest.permission.CAMERA)
+            else arrayOf(Manifest.permission.RECORD_AUDIO)
         if (required.all { checkSelfPermission(it) == PackageManager.PERMISSION_GRANTED }) return true
         requestPermissions(required, 30); status.text = "Grant permissions, then tap the button again."; return false
     }
-    private fun report(message: String) { val ticket = generation; runOnUiThread { if (ticket == generation && !isDestroyed) status.text = message } }
+    private fun report(message: String, ticket: Int) { runOnUiThread { if (ticket == generation && !isDestroyed) status.text = message } }
     private fun beginWork(block: suspend () -> Unit) {
         if (working || recording) return
         working = true; val ticket = ++generation
@@ -96,7 +98,7 @@ class SpeechActivity : ComponentActivity() {
         }
     }
     private fun startTurn(phone: Boolean) {
-        if (working || recording || !permissionsGranted()) return
+        if (working || recording || !permissionsGranted(!phone)) return
         if (!models.installed()) { status.text = "Download the speech model first."; return }
         recording = true; generation++; val ticket = generation
         val buffer = PcmTurn(); turn = buffer
@@ -159,7 +161,8 @@ class SpeechActivity : ComponentActivity() {
     }
     private suspend fun recognize(samples: FloatArray) {
         val started = SystemClock.elapsedRealtime()
-        val text = withContext(Dispatchers.IO) { inference.withLock { models.recognize(samples) { report(it) } } }
+        val ticket = generation
+        val text = withContext(Dispatchers.IO) { inference.withLock { models.recognize(samples) { report(it, ticket) } } }
         currentCoroutineContext().ensureActive()
         setResult(RESULT_OK, Intent().putExtra("transcript",text).putExtra("elapsedMs",SystemClock.elapsedRealtime()-started))
         finish()
