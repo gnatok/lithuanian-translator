@@ -101,7 +101,7 @@ public final class DebugLog {
             ActivityManagerInfo.append(context,text);
             AudioManager audio=context.getSystemService(AudioManager.class);
             text.append("\nAudio mode: ").append(audio.getMode());
-            for(AudioDeviceInfo device:audio.getDevices(AudioManager.GET_DEVICES_ALL))text.append("\nAudio device: id=").append(device.getId()).append(" type=").append(device.getType()).append(" input=").append(device.isSource()).append(" output=").append(device.isSink());
+            for(AudioDeviceInfo device:audio.getDevices(AudioManager.GET_DEVICES_INPUTS | AudioManager.GET_DEVICES_OUTPUTS))text.append("\nAudio device: id=").append(device.getId()).append(" type=").append(device.getType()).append(" input=").append(device.isSource()).append(" output=").append(device.isSink());
         }catch(Exception e){text.append("\nSnapshot error: ").append(e.getClass().getSimpleName()).append(": ").append(e.getMessage());}
         text.append("\nLogs exclude recorded audio and transcript/translation text. Export only when you choose.\n");return text.toString();
     }
