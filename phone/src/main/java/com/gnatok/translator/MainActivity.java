@@ -28,7 +28,7 @@ public final class MainActivity extends Activity {
     private Button listenButton, replyButton, speakButton, playbackButton, presentButton;
     private LinearLayout workspace, conversation, resultPanel;
     private EnglishPlayback playback;
-    private boolean resultEnglish, hasResult;
+    private boolean resultEnglish, hasResult, speechResult;
     private Dialog presentation;
     private AudioProbe probe;
     private WatchBridge watch;
@@ -37,6 +37,7 @@ public final class MainActivity extends Activity {
     private final TurnGate gate = new TurnGate();
     @Override public void onCreate(Bundle saved) {
         super.onCreate(saved);
+        DebugLog.event("phone.create", "restored=" + (saved != null));
         getWindow().setStatusBarColor(Color.rgb(17, 44, 43));
         ltToEn = translator(TranslateLanguage.LITHUANIAN, TranslateLanguage.ENGLISH);
         enToLt = translator(TranslateLanguage.ENGLISH, TranslateLanguage.LITHUANIAN);
@@ -53,6 +54,7 @@ public final class MainActivity extends Activity {
         scroll.setOnApplyWindowInsetsListener((v, insets) -> { android.graphics.Insets bars = insets.getInsets(WindowInsets.Type.systemBars()); v.setPadding(bars.left, bars.top, bars.right, bars.bottom); return insets; });
         label(root, "LT ↔ EN  /  CONVERSATION", 14).setTypeface(null, Typeface.BOLD);
         label(root, "Understand. Then reply.", 28).setTypeface(null, Typeface.BOLD);
+        button(root, "Debug timeline / export report", () -> startActivity(new Intent(this, DebugActivity.class)));
         status = label(root, "Checking offline language pack…", 16);
         status.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);
         playback = new EnglishPlayback(this, message -> { status.setText(message); refreshWatch(); });
@@ -182,31 +184,39 @@ public final class MainActivity extends Activity {
         presentation.setContentView(page); presentation.getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON); presentation.show(); presentation.getWindow().setLayout(-1, -1);
     }
     private void checkModels() {
+        DebugLog.event("translation.models.check", "start");
         RemoteModelManager.getInstance().getDownloadedModels(TranslateRemoteModel.class).addOnSuccessListener(this, models -> {
             ready = models.stream().anyMatch(m -> m.getLanguage().equals(TranslateLanguage.LITHUANIAN));
+            DebugLog.event("translation.models.ready", "lithuanian=" + ready + " installed=" + models.size());
             refreshWatch();
             status.setText(ready ? "Offline pack ready • translation stays on this phone" : "Download the Lithuanian pack before translating");
-        }).addOnFailureListener(this, e -> status.setText("Cannot check models: " + e.getMessage()));
+        }).addOnFailureListener(this, e -> { DebugLog.error("translation.models.check", e); status.setText("Cannot check models: " + e.getMessage()); });
     }
     private void download() {
+        DebugLog.event("translation.models.download", "start wifiRequired=true");
         status.setText("Downloading language pack over Wi-Fi…");
         DownloadConditions conditions = new DownloadConditions.Builder().requireWifi().build();
         Tasks.whenAll(ltToEn.downloadModelIfNeeded(conditions), enToLt.downloadModelIfNeeded(conditions))
-            .addOnSuccessListener(this, unused -> checkModels())
-            .addOnFailureListener(this, e -> status.setText("Download failed: " + e.getMessage()));
+            .addOnSuccessListener(this, unused -> { DebugLog.event("translation.models.download", "complete"); checkModels(); })
+            .addOnFailureListener(this, e -> { DebugLog.error("translation.models.download", e); status.setText("Download failed: " + e.getMessage()); });
     }
     private void translate() {
+        if (!speechResult) DebugLog.beginTurn(listening ? "lt-en" : "en-lt", "typed");
+        speechResult = false;
+        long started = android.os.SystemClock.elapsedRealtime();
         playback.stop();
         String text = input.getText().toString().trim();
-        if (text.isEmpty()) { input.setError("Enter a phrase"); return; }
+        if (text.isEmpty()) { DebugLog.event("translation.blocked", "empty input"); input.setError("Enter a phrase"); return; }
         sourcePreview.setText((listening ? "Latest Lithuanian input" : "Latest English input") + "\n" + text);
         sourcePreview.setVisibility(View.VISIBLE);
-        if (!ready) { status.setText("Download the offline pack first"); return; }
+        if (!ready) { DebugLog.event("translation.blocked", "missing language pack"); status.setText("Download the offline pack first"); return; }
         long ticket = gate.next(); boolean toEnglish = listening;
+        DebugLog.event("translation.start", "direction=" + (toEnglish ? "lt-en" : "en-lt") + " inputChars=" + text.length() + " ticket=" + ticket);
         status.setText("Translating locally…");
         translating=true;refreshWatch();
         (toEnglish ? ltToEn : enToLt).translate(text).addOnSuccessListener(this, result -> {
-            if (!gate.accepts(ticket)) return;
+            if (!gate.accepts(ticket)) { DebugLog.event("translation.stale", "ticket=" + ticket); return; }
+            DebugLog.event("translation.complete", "outputChars=" + result.length() + " elapsedMs=" + (android.os.SystemClock.elapsedRealtime() - started));
             output.setText(result); outputLabel.setText(toEnglish ? "English • completed translation" : "Lietuvių • completed translation");
             hasResult = true; resultEnglish = toEnglish; playbackButton.setEnabled(toEnglish); presentButton.setEnabled(true);
             status.setText("Translated on this phone");
@@ -216,8 +226,9 @@ public final class MainActivity extends Activity {
             request.getDataMap().putString("language", toEnglish ? "English" : "Lietuvių");
             request.getDataMap().putLong("time", System.currentTimeMillis());
             Wearable.getDataClient(this).putDataItem(request.asPutDataRequest().setUrgent())
-                .addOnFailureListener(this, e -> status.setText("Translated locally • watch sync unavailable"));
-        }).addOnFailureListener(this, e -> { if (gate.accepts(ticket)) { translating=false;refreshWatch();status.setText("Translation failed: " + e.getMessage()); } });
+                .addOnSuccessListener(this, item -> DebugLog.event("watch.translation.synced", "success"))
+                .addOnFailureListener(this, e -> { DebugLog.error("watch.translation.sync", e); status.setText("Translated locally • watch sync unavailable"); });
+        }).addOnFailureListener(this, e -> { DebugLog.error("translation", e); if (gate.accepts(ticket)) { translating=false;refreshWatch();status.setText("Translation failed: " + e.getMessage()); } });
     }
     private void chooseHeadset() {
         playback.stop();
@@ -237,11 +248,12 @@ public final class MainActivity extends Activity {
     private int dp(int value) { return Math.round(value * getResources().getDisplayMetrics().density); }
     @Override protected void onActivityResult(int request, int result, Intent data) {
         super.onActivityResult(request, result, data);
+        DebugLog.event("phone.activity.result", "request=" + request + " result=" + result + " hasData=" + (data != null));
         if (request == 101 && result == RESULT_OK && data != null) {
             if(data.hasExtra("language"))selectDirection(!"en".equals(data.getStringExtra("language")));
             watchArmed=data.getBooleanExtra("watchArmed",watchArmed);watchToggle.setChecked(watchArmed);
             String transcript = data.getStringExtra("transcript");
-            if (transcript != null && !transcript.trim().isEmpty()) { input.setText(transcript); translate(); }
+            if (transcript != null && !transcript.trim().isEmpty()) { DebugLog.event("phone.transcript.received", "chars=" + transcript.length()); speechResult=true; input.setText(transcript); translate(); }
         }
     }
     @Override protected void onSaveInstanceState(Bundle state) { super.onSaveInstanceState(state); state.putBoolean("listening", listening); state.putFloat("font", font); state.putBoolean("flipped", flipped); state.putBoolean("resultEnglish", resultEnglish); state.putBoolean("hasResult", hasResult); state.putString("input", input.getText().toString()); state.putString("output", output.getText().toString()); state.putString("label", outputLabel.getText().toString()); state.putString("sourcePreview", sourcePreview.getText().toString()); }

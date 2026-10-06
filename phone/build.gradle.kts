@@ -2,8 +2,10 @@ plugins { id("com.android.application"); id("org.jetbrains.kotlin.android") }
 android {
     namespace = "com.gnatok.translator"
     compileSdk = 36
+    buildFeatures { buildConfig = true }
     defaultConfig {
-        applicationId = "com.gnatok.translator"; minSdk = 31; targetSdk = 36; versionCode = 3; versionName = "0.3.0"
+        applicationId = "com.gnatok.translator"; minSdk = 31; targetSdk = 36; versionCode = 4; versionName = "0.3.1-debug"
+        buildConfigField("String", "GIT_SHA", "\"${System.getenv("GITHUB_SHA")?.take(12) ?: "local"}\"")
         ndk { abiFilters += "arm64-v8a" }
     }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }

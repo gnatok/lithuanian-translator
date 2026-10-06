@@ -50,9 +50,10 @@ internal object VadModels {
         }
     }
     suspend fun install(context: Context) = withContext(Dispatchers.IO) {
+        DebugLog.event("vad.model.install", "begin")
         installLock.withLock {
             val target = file(context)
-            if (valid(target)) return@withLock
+            if (valid(target)) { DebugLog.event("vad.model.ready", "existing model checksum verified");return@withLock }
             requireWifi(context)
             val pending = File(target.path + ".part")
             val connection = URL(URL_STRING).openConnection() as HttpURLConnection
@@ -76,6 +77,7 @@ internal object VadModels {
                 } }
                 check(valid(pending)) { "Speech detection model integrity check failed" }
                 check(pending.renameTo(target)) { "Could not finalize speech detection model" }
+                DebugLog.event("vad.model.ready", "download bytes=$total checksum verified")
             } finally {
                 connection.disconnect()
                 pending.delete()
@@ -112,6 +114,7 @@ internal class SpeechEndpoint private constructor(private val vad: Vad) : Closea
                 // Silero emits a completed segment only after minSpeechDuration and minSilenceDuration.
                 if (!vad.empty()) {
                     ended = true
+                    DebugLog.event("vad.endpoint", "speech followed by configured 1000ms silence")
                     vad.clear()
                     return true
                 }
@@ -132,6 +135,7 @@ internal class SpeechEndpoint private constructor(private val vad: Vad) : Closea
         if (!closed) {
             closed = true
             vad.release()
+            DebugLog.event("vad.closed", "native detector released")
         }
     }
 
@@ -142,6 +146,7 @@ internal class SpeechEndpoint private constructor(private val vad: Vad) : Closea
                 return withContext(Dispatchers.IO) {
                     val model = VadModels.verifiedPath(context)
                     currentCoroutineContext().ensureActive()
+                    DebugLog.event("vad.initialize", "sampleRate=16000 threshold=0.5 minSpeechMs=250 minSilenceMs=1000 window=512 threads=1")
                     SpeechEndpoint(Vad(config = VadModelConfig(
                         sileroVadModelConfig = SileroVadModelConfig(
                             model = model, threshold = 0.5f, minSpeechDuration = 0.25f,
@@ -149,9 +154,10 @@ internal class SpeechEndpoint private constructor(private val vad: Vad) : Closea
                             // PcmTurn enforces its own 20-second limit; do not split a speaking turn here.
                             maxSpeechDuration = 30.0f
                         ), sampleRate = 16000, numThreads = 1, provider = "cpu"
-                    ))).also { created = it }
+                    ))).also { created = it;DebugLog.event("vad.ready", "native detector initialized") }
                 }
             } catch (error: Throwable) {
+                DebugLog.error("vad.initialize.error",error)
                 // withContext can discard a completed native allocation when the caller cancels.
                 created?.close()
                 throw error

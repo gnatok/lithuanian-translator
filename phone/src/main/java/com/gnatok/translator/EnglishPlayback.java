@@ -31,18 +31,20 @@ final class EnglishPlayback implements AutoCloseable {
         final int ticket; final File file; final AudioDeviceInfo device;
         final ByteArrayOutputStream pcm = new ByteArrayOutputStream();
         int rate, channels, encoding;
+        final long started=SystemClock.elapsedRealtime();
         Pending(int ticket, File file, AudioDeviceInfo device) { this.ticket=ticket;this.file=file;this.device=device; }
     }
     EnglishPlayback(Activity activity, Consumer<String> status) {
         this.activity=activity; this.status=status; audio=activity.getSystemService(AudioManager.class);
         File[] leftovers=activity.getCacheDir().listFiles((directory,name)->name.startsWith("english-")&&name.endsWith(".wav"));
         if(leftovers!=null)for(File file:leftovers)file.delete();
-        tts=new TextToSpeech(activity.getApplicationContext(), result -> main.post(() -> ready=result==TextToSpeech.SUCCESS));
+        tts=new TextToSpeech(activity.getApplicationContext(), result -> main.post(() -> {ready=result==TextToSpeech.SUCCESS;DebugLog.event("tts.engine.init","result="+result+" ready="+ready);}));
         tts.setOnUtteranceProgressListener(new UtteranceProgressListener() {
             private Pending current(String id) { Pending p=pending; return p!=null && id.equals(Integer.toString(p.ticket)) && p.ticket==generation.get()?p:null; }
-            @Override public void onStart(String id) {}
+            @Override public void onStart(String id) { DebugLog.event("tts.synthesis.start","ticket="+id); }
             @Override public void onBeginSynthesis(String id,int rate,int encoding,int channels) {
                 Pending p=current(id); if(p!=null) synchronized(p) { p.rate=rate;p.encoding=encoding;p.channels=channels; }
+                DebugLog.event("tts.synthesis.format","ticket="+id+" rate="+rate+" encoding="+encoding+" channels="+channels);
             }
             @Override public void onAudioAvailable(String id, byte[] bytes) {
                 Pending p=current(id); if(p==null)return;
@@ -53,9 +55,11 @@ final class EnglishPlayback implements AutoCloseable {
             }
             @Override public void onDone(String id) {
                 Pending p=current(id); if(p==null)return;
+                DebugLog.event("tts.synthesis.complete","ticket="+id+" bytes="+p.pcm.size()+" elapsedMs="+(SystemClock.elapsedRealtime()-p.started));
                 try { worker.execute(() -> playPcm(p)); } catch(RejectedExecutionException ignored) { p.file.delete(); }
             }
             @Override public void onError(String id) { Pending p=current(id); if(p!=null)main.post(() -> fail(p.ticket,"Offline speech synthesis failed. Check your installed English voice.")); }
+            @Override public void onError(String id,int code) { DebugLog.event("tts.synthesis.error","ticket="+id+" code="+code);onError(id); }
         });
     }
     void play(String text) {
@@ -65,6 +69,7 @@ final class EnglishPlayback implements AutoCloseable {
             status.accept("Allow nearby devices, then tap Play again.");return;
         }
         List<AudioDeviceInfo> devices=bluetoothOutputs();
+        DebugLog.event("tts.outputs","bluetoothCount="+devices.size());
         if(devices.isEmpty()) { status.accept("Connect glasses for media audio in Android Bluetooth settings.");return; }
         String[] labels=devices.stream().map(d->d.getProductName().toString()).toArray(String[]::new);
         new AlertDialog.Builder(activity).setTitle("Play English through…").setItems(labels,(dialog,which)->{
@@ -85,9 +90,11 @@ final class EnglishPlayback implements AutoCloseable {
     }
     private void synthesize(String text,AudioDeviceInfo device) {
         stop(); int ticket=generation.get();
+        DebugLog.event("tts.request","ticket="+ticket+" characters="+text.length()+" engine="+tts.getDefaultEngine()+" ready="+ready+" preferred="+route(device));
         if(!ready) { status.accept("Speech engine is not ready. Try again shortly.");return; }
         Voice voice=tts.getVoices()==null?null:tts.getVoices().stream().filter(v->v.getLocale().getLanguage().equals("en") && !v.isNetworkConnectionRequired()
             && !v.getFeatures().contains(TextToSpeech.Engine.KEY_FEATURE_NOT_INSTALLED)).findFirst().orElse(null);
+        DebugLog.event("tts.voice","available="+(tts.getVoices()==null?0:tts.getVoices().size())+" selected="+(voice==null?"none":voice.getName())+" offline="+(voice!=null&&!voice.isNetworkConnectionRequired()));
         if(voice==null || tts.setVoice(voice)!=TextToSpeech.SUCCESS) { status.accept("Install an offline English voice in Android text-to-speech settings.");return; }
         if(text.trim().isEmpty() || text.length()>TextToSpeech.getMaxSpeechInputLength()) { status.accept("Choose a shorter completed English translation.");return; }
         try {
@@ -95,13 +102,13 @@ final class EnglishPlayback implements AutoCloseable {
             Pending p=new Pending(ticket,file,device); pending=p;
             status.accept("Preparing English speech offline…");
             if(tts.synthesizeToFile(text,new Bundle(),file,Integer.toString(ticket))!=TextToSpeech.SUCCESS)fail(ticket,"Could not prepare offline speech.");
-        } catch(IOException e) { fail(ticket,"Cannot create temporary speech audio."); }
+        } catch(IOException e) { DebugLog.error("tts.synthesis.failed",e);fail(ticket,"Cannot create temporary speech audio."); }
     }
     private void playPcm(Pending p) {
         AudioTrack track=null;
         String finalMessage="English playback finished";
         AudioFocusRequest focus=new AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT).setAudioAttributes(ATTRIBUTES)
-            .setOnAudioFocusChangeListener(change->{ if(change<0)main.post(()->fail(p.ticket,"Playback stopped for an audio interruption.")); },main).build();
+            .setOnAudioFocusChangeListener(change->{ DebugLog.event("tts.focus.change","change="+change);if(change<0)main.post(()->fail(p.ticket,"Playback stopped for an audio interruption.")); },main).build();
         try {
             byte[] bytes; synchronized(p) { bytes=p.pcm.toByteArray(); }
             if(p.ticket!=generation.get())return;
@@ -112,7 +119,8 @@ final class EnglishPlayback implements AutoCloseable {
             int chunk=Math.max(frameBytes,p.rate*frameBytes/50);
             int minimum=AudioTrack.getMinBufferSize(p.rate,mask,p.encoding);
             if(minimum<=0)throw new IOException("Unsupported speech audio format");
-            if(audio.requestAudioFocus(focus)!=AudioManager.AUDIOFOCUS_REQUEST_GRANTED)throw new IOException("Audio focus unavailable");
+            int focusResult=audio.requestAudioFocus(focus);DebugLog.event("tts.focus.request","result="+focusResult);
+            if(focusResult!=AudioManager.AUDIOFOCUS_REQUEST_GRANTED)throw new IOException("Audio focus unavailable");
             track=new AudioTrack.Builder().setAudioAttributes(ATTRIBUTES).setAudioFormat(new AudioFormat.Builder().setSampleRate(p.rate).setChannelMask(mask).setEncoding(p.encoding).build())
                 .setBufferSizeInBytes(Math.max(minimum,chunk*2)).setTransferMode(AudioTrack.MODE_STREAM).build();
             if(!track.setPreferredDevice(p.device))throw new IOException("Glasses output route rejected");
@@ -120,6 +128,7 @@ final class EnglishPlayback implements AutoCloseable {
             AtomicBoolean audible=new AtomicBoolean(false);
             track.addOnRoutingChangedListener(router->{
                 AudioDeviceInfo actual=monitored.getRoutedDevice();
+                DebugLog.event("tts.route.changed","actual="+route(actual)+" preferred="+route(p.device)+" audible="+audible.get());
                 if(audible.get() && (actual==null || actual.getId()!=p.device.getId())) { try { monitored.pause();monitored.flush(); }catch(IllegalStateException ignored){} main.post(()->fail(p.ticket,"Glasses audio route changed. Playback stopped.")); }
             },main);
             if(p.ticket!=generation.get())return;
@@ -132,6 +141,7 @@ final class EnglishPlayback implements AutoCloseable {
                 if(primed<=0)throw new IOException("Audio route setup failed");primedFrames+=primed/frameBytes;
             }
             notify(p.ticket,"Playing English in "+p.device.getProductName());
+            DebugLog.event("tts.playback.start","actual="+route(track.getRoutedDevice())+" bytes="+bytes.length+" setupMs="+(SystemClock.elapsedRealtime()-began));
             audible.set(true);
             long writtenFrames=primedFrames;
             for(int offset=0;offset<bytes.length && p.ticket==generation.get();) {
@@ -142,16 +152,19 @@ final class EnglishPlayback implements AutoCloseable {
             }
             long deadline=SystemClock.elapsedRealtime()+1000;
             while(p.ticket==generation.get() && Integer.toUnsignedLong(track.getPlaybackHeadPosition())<writtenFrames && SystemClock.elapsedRealtime()<deadline)Thread.sleep(20);
-        } catch(Exception e) { finalMessage=e.getMessage()==null?"Playback failed":e.getMessage(); }
+        } catch(Exception e) { DebugLog.error("tts.playback.failed",e);finalMessage=e.getMessage()==null?"Playback failed":e.getMessage(); }
         finally {
             if(track!=null){ if(playing==track)playing=null;try{track.pause();track.flush();}catch(IllegalStateException ignored){}track.release(); }
             audio.abandonAudioFocusRequest(focus);p.file.delete();if(pending==p)pending=null;
             notify(p.ticket,finalMessage);
+            DebugLog.event("tts.playback.end","ticket="+p.ticket+" cancelled="+(p.ticket!=generation.get())+" elapsedMs="+(SystemClock.elapsedRealtime()-p.started)+" outcome="+finalMessage);
         }
     }
     private void notify(int ticket,String message) { main.post(()->{if(!closed && ticket==generation.get())status.accept(message);}); }
-    private void fail(int ticket,String message) { if(ticket==generation.get()){stop();status.accept(message);} }
+    private static String route(AudioDeviceInfo device){return device==null?"none":"type="+device.getType()+",id="+device.getId();}
+    private void fail(int ticket,String message) { DebugLog.event("tts.failure","ticket="+ticket+" reason="+message);if(ticket==generation.get()){stop();status.accept(message);} }
     void stop() {
+        if(pending!=null||playing!=null)DebugLog.event("tts.stop","ticket="+generation.get());
         generation.incrementAndGet();tts.stop();
         AudioTrack current=playing;if(current!=null)try{current.pause();current.flush();}catch(IllegalStateException ignored){}
         Pending p=pending;pending=null;if(p!=null)p.file.delete();
