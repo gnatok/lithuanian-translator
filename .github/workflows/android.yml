@@ -28,6 +28,8 @@ jobs:
       - name: Install Android SDK
         run: sdkmanager 'platforms;android-36' 'build-tools;35.0.0'
       - name: Test, lint, and build both APKs
+        run: bash scripts/fetch-sherpa.sh
+      - name: Verify and assemble
         run: ./gradlew --no-daemon :core:test :phone:lintDebug :wear:lintDebug :phone:assembleDebug :wear:assembleDebug
       - uses: actions/upload-artifact@v4
         with:

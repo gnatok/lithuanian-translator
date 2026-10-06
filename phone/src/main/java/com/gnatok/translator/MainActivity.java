@@ -2,6 +2,7 @@ package com.gnatok.translator;
 
 import android.Manifest;
 import android.app.*;
+import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.media.AudioDeviceInfo;
@@ -45,6 +46,11 @@ public final class MainActivity extends Activity {
         direction = button(root, "", () -> { listening = !listening; gate.next(); input.setText(""); refreshDirection(); status.setText(ready ? "Ready for typed translation" : "Download the language pack first"); });
         input = new EditText(this); input.setMinLines(2); input.setTextSize(22); input.setGravity(Gravity.TOP); root.addView(input);
         button(root, "Translate text on this phone", this::translate);
+        button(root, "Speak using glasses / phone / WAV", () -> {
+            if (!ready) { status.setText("Download the translation language pack first"); return; }
+            gate.next(); probe.stop();
+            startActivityForResult(new Intent(this, SpeechActivity.class).putExtra("language", listening ? "lt" : "en"), 101);
+        });
         outputLabel = label(root, saved == null ? "Translation" : saved.getString("label", "Translation"), 16);
         output = label(root, saved == null ? "Your translation will appear here." : saved.getString("output", ""), font);
         output.setTextIsSelectable(true); output.setPadding(0, dp(20), 0, dp(20)); output.setRotation(flipped ? 180 : 0);
@@ -57,7 +63,7 @@ public final class MainActivity extends Activity {
         diagnostic = label(root, "Not recording", 16);
         button(root, "Choose headset and test microphone", this::chooseHeadset);
         button(root, "Stop microphone", () -> { probe.stop(); diagnostic.setText("Stopped. Audio discarded."); });
-        label(root, "POC 0.1 • Typed translation is connected. Speech recognition, Meta DAT PCM capture and spoken playback are next. Both spoken directions remain core requirements.", 14);
+        label(root, "POC 0.2 • Offline Parakeet recognition and experimental Meta PCM capture. Device compatibility and speech quality need testing. Playback and automatic voice detection are next.", 14);
         if (saved != null) input.setText(saved.getString("input", ""));
         refreshDirection(); checkModels();
     }
@@ -113,6 +119,13 @@ public final class MainActivity extends Activity {
     private TextView label(LinearLayout root, String value, float size) { TextView view = new TextView(this); view.setText(value); view.setTextSize(size); view.setTextColor(Color.rgb(17, 44, 43)); view.setPadding(0, dp(8), 0, dp(8)); root.addView(view); return view; }
     private Button button(LinearLayout root, String title, Runnable action) { Button view = new Button(this); view.setText(title); view.setAllCaps(false); view.setMinHeight(dp(48)); view.setOnClickListener(v -> action.run()); root.addView(view); return view; }
     private int dp(int value) { return Math.round(value * getResources().getDisplayMetrics().density); }
+    @Override protected void onActivityResult(int request, int result, Intent data) {
+        super.onActivityResult(request, result, data);
+        if (request == 101 && result == RESULT_OK && data != null) {
+            String transcript = data.getStringExtra("transcript");
+            if (transcript != null && !transcript.trim().isEmpty()) { input.setText(transcript); translate(); }
+        }
+    }
     @Override protected void onSaveInstanceState(Bundle state) { super.onSaveInstanceState(state); state.putBoolean("listening", listening); state.putFloat("font", font); state.putBoolean("flipped", flipped); state.putString("input", input.getText().toString()); state.putString("output", output.getText().toString()); state.putString("label", outputLabel.getText().toString()); }
     @Override protected void onStop() { super.onStop(); probe.stop(); diagnostic.setText("Not recording"); }
     @Override protected void onDestroy() { gate.next(); probe.close(); ltToEn.close(); enToLt.close(); super.onDestroy(); }
