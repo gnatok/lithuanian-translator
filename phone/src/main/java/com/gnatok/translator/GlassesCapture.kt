@@ -207,16 +207,25 @@ internal class GlassesCapture(private val activity: ComponentActivity, private v
 
     private suspend fun stopCaptureLocked() {
         captureJob?.cancelAndJoin(); captureJob = null
-        if (camera != null) {
-            try { camera?.stop() } finally {
-                camera = null
-                // stop() invalidates the object; detach its slot before the next addCamera().
-                session?.removeCamera()?.onFailure { error, _ ->
+        val previous = camera ?: return
+        camera = null
+        // On some DAT 1.0 paths stop() also detaches. Explicit removal covers the others.
+        var failure: Throwable? = null
+        try { previous.stop() } catch (error: Throwable) { failure = error }
+        try {
+            session?.removeCamera()?.onFailure { error, _ ->
+                val detachFailure = cameraDetachFailure(error)
+                if (detachFailure == null) {
+                    DebugLog.event("meta.camera.remove", "already detached")
+                } else {
                     DebugLog.event("meta.camera.remove.error", error.description)
-                    throw IllegalStateException("Could not detach glasses camera: ${error.description}")
+                    throw detachFailure
                 }
             }
+        } catch (error: Throwable) {
+            if (failure == null) failure = error else failure.addSuppressed(error)
         }
+        failure?.let { throw it }
     }
     /** End audio/video only, retaining the input-only armed session between conversation turns. */
     suspend fun stopCapture() = operations.withLock {
@@ -225,7 +234,10 @@ internal class GlassesCapture(private val activity: ComponentActivity, private v
     }
     suspend fun stop() = operations.withLock {
         DebugLog.event("meta.session.stop", "full teardown")
-        try { stopCaptureLocked() } finally { withContext(NonCancellable) {
+        try { stopCaptureLocked() }
+        catch (error: CancellationException) { throw error }
+        catch (error: Throwable) { DebugLog.error("meta.session.cleanup.camera", error) }
+        finally { withContext(NonCancellable) {
             // A canceled caller must still release every native capability and the session.
             runCatching { camera?.stop() }
             camera = null
@@ -234,7 +246,8 @@ internal class GlassesCapture(private val activity: ComponentActivity, private v
             inputs = null
             sessionJob?.cancelAndJoin(); sessionJob = null
             sessionFailure = null
-            try { session?.stop() } finally { session = null }
+            runCatching { session?.stop() }.onFailure { DebugLog.error("meta.session.cleanup.stop", it) }
+            session = null
         } }
     }
     fun close() {

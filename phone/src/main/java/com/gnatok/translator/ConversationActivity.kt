@@ -161,13 +161,13 @@ class ConversationActivity : ComponentActivity() {
                     val buffer = PcmTurn()
                     val endpoint = SpeechEndpoint.create(applicationContext)
                     val ended = CompletableDeferred<Unit>()
-                    try {
+                    withCaptureCleanup(
+                        stopCapture = { withContext(NonCancellable) { glasses.stopCapture() } },
+                        closeDetector = { endpoint.close() }
+                    ) {
                         show("listening", "Listening to Lithuanian…")
                         glasses.start(buffer, endpoint, { ended.complete(Unit) }, { message -> ended.completeExceptionally(IllegalStateException(message)) })
                         withTimeout(35000) { ended.await() }
-                    } finally {
-                        withContext(NonCancellable) { glasses.stopCapture() }
-                        endpoint.close()
                     }
                     if (!current(ticket)) break
                     if (!endpoint.hasSpeechEver()) {
@@ -212,7 +212,10 @@ class ConversationActivity : ComponentActivity() {
         val previous = operation
         previous?.cancel(); playback.stop()
         cleanup = lifecycleScope.launch {
-            previous?.join(); glasses.stopCapture()
+            previous?.join()
+            try { glasses.stopCapture() }
+            catch (e: CancellationException) { throw e }
+            catch (e: Exception) { failSession("pause_cleanup", e); return@launch }
             if (active && paused) show(if (armed) "armed" else "ready", if (armed) "Paused. Tap the glasses to listen again." else "Paused. Tap Start listening on the phone to resume.")
         }
         show("pausing", "Pausing…")
@@ -232,7 +235,11 @@ class ConversationActivity : ComponentActivity() {
         if (::playback.isInitialized) playback.stop()
         cleanup = lifecycleScope.launch {
             previous?.join(); oldCleanup?.join()
-            if (::glasses.isInitialized) glasses.stop()
+            if (::glasses.isInitialized) {
+                try { glasses.stop() }
+                catch (e: CancellationException) { throw e }
+                catch (e: Exception) { DebugLog.error("conversation.stop.cleanup", e) }
+            }
         }
         window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         show("stopped", message)

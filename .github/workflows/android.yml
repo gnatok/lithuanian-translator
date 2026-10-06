@@ -30,7 +30,7 @@ jobs:
       - name: Fetch verified speech runtime
         run: bash scripts/fetch-sherpa.sh
       - name: Verify and assemble
-        run: ./gradlew --no-daemon :core:test :phone:lintDebug :wear:lintDebug :phone:assembleDebug :wear:assembleDebug
+        run: ./gradlew --no-daemon :core:test :phone:testDebugUnitTest :phone:lintDebug :wear:lintDebug :phone:assembleDebug :wear:assembleDebug
       - uses: actions/upload-artifact@v4
         with:
           name: phone-and-watch-debug-apks
@@ -44,5 +44,6 @@ jobs:
           name: verification-reports
           path: |
             core/build/reports/tests/
+            phone/build/reports/tests/
             phone/build/reports/lint-results-debug.*
             wear/build/reports/lint-results-debug.*
