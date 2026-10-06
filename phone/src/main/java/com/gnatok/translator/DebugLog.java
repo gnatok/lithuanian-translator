@@ -42,6 +42,8 @@ public final class DebugLog {
     }
     public static void event(String stage,String detail) {
         lastStage=stage;
+        if (stage.endsWith(".error") || stage.endsWith(".failure") || stage.endsWith(".failed"))
+            lastError=stage+": "+limit(detail,2000);
         String entry=line(stage,detail);
         writer.execute(()->write(entry));
     }

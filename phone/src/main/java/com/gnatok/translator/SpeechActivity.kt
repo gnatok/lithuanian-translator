@@ -108,7 +108,7 @@ class SpeechActivity : ComponentActivity() {
         text("Experimental glasses audio also activates camera streaming. Video is discarded. Enable Developer Mode in Meta AI; firmware/access support still needs testing.", 16f)
         button("Download / repair pause detection only") { beginWork { VadModels.install(applicationContext);status.text="Automatic pause detection ready." } }
         button("Import 16 kHz mono PCM16 WAV") { if (!working && !recording) picker.launch(arrayOf("audio/*", "application/octet-stream")) }
-        text("All recognition is local. Automatic finishing uses Silero after speech and a one-second pause. Without its downloaded model, tap Finish manually. Models stay warm between turns when memory permits.", 16f)
+        text("All recognition is local. Automatic finishing uses Silero after speech and a three-second pause. Without its downloaded model, tap Finish manually. Models stay warm between turns when memory permits.", 16f)
     }
     private fun permissionsGranted(forGlasses: Boolean = true): Boolean {
         val required = if (forGlasses) arrayOf(Manifest.permission.RECORD_AUDIO, Manifest.permission.BLUETOOTH_CONNECT, Manifest.permission.CAMERA)
@@ -118,7 +118,7 @@ class SpeechActivity : ComponentActivity() {
         DebugLog.event("android.permission.request", "glasses=$forGlasses")
         requestPermissions(required, 30); status.text = "Grant permissions, then tap the button again."; return false
     }
-    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         DebugLog.event("android.permission.result", "request=$requestCode " + permissions.mapIndexed { index, permission -> "${permission.substringAfterLast('.')}=${grantResults.getOrNull(index) == PackageManager.PERMISSION_GRANTED}" }.joinToString())
     }
