@@ -2,7 +2,13 @@
 
 Android phone and Wear OS companion for conversations in Lithuania using Oakley Meta HSTN. **Lithuanian speech → English is the primary core feature; English speech → large Lithuanian text is also core.**
 
-## Current milestone: 0.3 conversation POC
+## Current milestone: 0.4 foreground conversation POC
+
+Start with **Setup**, then **Start translation**. Setup checks Android/Meta permissions, required offline models and an installed offline English voice. Enable the glasses session and tap the touchpad to listen. After three seconds of silence, recognition and translation run locally, English plays through the selected glasses output, and listening restarts. Experimental Inputs must be available; **Start from phone · without glasses taps** tests the same audio loop independently.
+
+The app must remain visible. Frame touch does not cold-launch it. Capture pauses during recognition and playback; automatic interruption by new speech is not implemented. A glasses tap (when enabled) or phone pause stops the current turn. Physical HSTN behavior is unverified.
+
+Use the [conversation test guide](docs/CONVERSATION_TEST.md). The separate [debug timeline and export](docs/DEBUGGING.md) records permissions, session/input events, audio levels, speech detection, model operations, timings, translation and playback errors without saving audio or conversation text.
 
 Implemented:
 - On-device **typed** Lithuanian ↔ English translation using ML Kit. Download the language pack explicitly over Wi-Fi, then translate offline.
@@ -16,7 +22,7 @@ Implemented:
 
 New in 0.3:
 - Clear Listen/Reply phone controls, visible source transcript, foldable split layout and full-screen Lithuanian presentation.
-- Optional Silero pause detection: ≥250 ms of speech followed by one second of silence ends a turn. Manual Finish remains available.
+- Silero pause detection: ≥250 ms of speech followed by three seconds of silence ends a turn. Manual Finish remains available in the comparison screen.
 - Offline English playback to a selected Bluetooth media output, with route verification, interruption handling and no intentional phone-speaker fallback.
 - Watch turn/finish/cancel/playback commands with correlated acknowledgments, expiry, duplicate protection and explicit phone arming. The phone must remain foreground; no background listening.
 - Cached Parakeet engine across turns, serialized native access and memory-pressure cleanup.
@@ -27,7 +33,7 @@ Use [tonight's test guide](docs/TONIGHT_TEST.md) for the shortest useful device 
 
 ### Try speech
 
-Download the translation pack on the main screen, choose LT → EN or EN → LT, then open **Speak using glasses / phone / WAV**. Download Parakeet over unmetered Wi-Fi and keep that screen open. Completed verified files survive cancellation; incomplete files restart. Allow roughly 1 GB of free storage. The phone APK targets ARM64.
+Complete **Setup** over unmetered Wi-Fi and keep that screen open. Completed verified files survive cancellation; incomplete files restart. Allow roughly 1 GB of free storage. The phone APK targets ARM64. Manual reply/comparison tools remain available in the expandable home section.
 
 For glasses, enable Developer Mode in Meta AI, connect this app to Meta AI, grant glasses camera/microphone access and tap **Start glasses turn**. Registration needs internet; runtime offline behavior depends on SDK/firmware and must be tested. This development build uses Meta application ID/token `0` and callback scheme `lttranslator`. If Developer Mode still requires project configuration for your account, use your Wearables Developer Center settings; do not commit credentials.
 
