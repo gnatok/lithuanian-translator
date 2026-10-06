@@ -41,7 +41,7 @@ internal class GlassesCapture(private val activity: ComponentActivity, private v
     }
     fun register() { initialize(); Wearables.startRegistration(activity) }
     fun permissions() { initialize(); requestingMicrophone = false; permissionLauncher.launch(Permission.CAMERA) }
-    suspend fun start(turn: PcmTurn, complete: () -> Unit, failed: (String) -> Unit) {
+    suspend fun start(turn: PcmTurn, endpoint: SpeechEndpoint?, complete: () -> Unit, failed: (String) -> Unit) {
         initialize()
         for (permission in listOf(Permission.CAMERA, Permission.MICROPHONE)) {
             check(Wearables.checkPermissionStatus(permission).getOrDefault(PermissionStatus.Denied) == PermissionStatus.Granted) {
@@ -68,7 +68,9 @@ internal class GlassesCapture(private val activity: ComponentActivity, private v
                             scope.launch(Dispatchers.IO, start = CoroutineStart.UNDISPATCHED) {
                                 try {
                                     added.stream.audioStream.collect { frame ->
-                                        if (turn.append(frame.buffer, frame.presentationTimeUs)) withContext(Dispatchers.Main) { complete() }
+                                        val full = turn.append(frame.buffer, frame.presentationTimeUs)
+                                        val ended = endpoint?.acceptPcm16(frame.buffer) == true
+                                        if (full || ended) withContext(Dispatchers.Main) { complete() }
                                     }
                                 } catch (e: CancellationException) { throw e }
                                 catch (e: Exception) { withContext(Dispatchers.Main) { failed(e.message ?: "Invalid PCM audio") } }

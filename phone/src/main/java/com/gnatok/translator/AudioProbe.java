@@ -18,6 +18,7 @@ final class AudioProbe implements AutoCloseable {
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
     private volatile boolean running;
     private volatile boolean busy;
+    private volatile boolean closed;
     private volatile int generation;
     AudioProbe(Context context) { manager = context.getSystemService(AudioManager.class); }
     @SuppressLint("MissingPermission") // MainActivity checks BLUETOOTH_CONNECT before calling.
@@ -27,15 +28,21 @@ final class AudioProbe implements AutoCloseable {
     }
     @SuppressLint("MissingPermission") // MainActivity gates both RECORD_AUDIO and BLUETOOTH_CONNECT; revocation is caught below.
     void start(AudioDeviceInfo selected, Consumer<String> report) {
+        if (closed) return;
         if (busy) { report.accept("Previous microphone session is active or stopping. Try again shortly."); return; }
         busy = true;
         running = true;
         final int ticket = ++generation;
         worker.execute(() -> {
             AudioRecord recorder = null;
-            int previousMode = manager.getMode();
-            AudioDeviceInfo previousDevice = manager.getCommunicationDevice();
+            int previousMode = AudioManager.MODE_NORMAL;
+            AudioDeviceInfo previousDevice = null;
+            boolean restoreRoute = false;
             try {
+                previousMode = manager.getMode();
+                previousDevice = manager.getCommunicationDevice();
+                restoreRoute = true;
+                if (!running || ticket != generation) return;
                 manager.setMode(AudioManager.MODE_IN_COMMUNICATION);
                 if (!manager.setCommunicationDevice(selected)) throw new IllegalStateException("Android rejected the selected headset route");
                 int minimum = AudioRecord.getMinBufferSize(16000, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT);
@@ -68,8 +75,14 @@ final class AudioProbe implements AutoCloseable {
                 post(ticket, report, "Diagnostic finished. Audio was discarded. Repeat with the other speaker talking at 1 metre; compare signal levels. This does not yet measure transcription quality.");
             } catch (Exception error) { post(ticket, report, "Audio diagnostic: " + error.getMessage()); }
             finally {
-                if (recorder != null) { try { recorder.stop(); } catch (IllegalStateException ignored) {} recorder.release(); }
-                try { manager.clearCommunicationDevice(); if (previousDevice != null) manager.setCommunicationDevice(previousDevice); manager.setMode(previousMode); } catch (RuntimeException ignored) {}
+                if (recorder != null) {
+                    try { recorder.stop(); } catch (RuntimeException ignored) {}
+                    try { recorder.release(); } catch (RuntimeException ignored) {}
+                }
+                if (restoreRoute) {
+                    try { manager.clearCommunicationDevice(); if (previousDevice != null) manager.setCommunicationDevice(previousDevice); } catch (RuntimeException ignored) {}
+                    try { manager.setMode(previousMode); } catch (RuntimeException ignored) {}
+                }
                 running = false;
                 busy = false;
             }
@@ -77,5 +90,15 @@ final class AudioProbe implements AutoCloseable {
     }
     private void post(int ticket, Consumer<String> report, String value) { main.post(() -> { if (ticket == generation) report.accept(value); }); }
     void stop() { running = false; generation++; }
-    @Override public void close() { stop(); worker.shutdown(); }
+    /** Call on the main thread. A later stop/start/close invalidates this pending transition. */
+    void stopThen(Runnable continuation) {
+        if (closed) return;
+        stop();
+        final int ticket = generation;
+        // The executor barrier runs only after recorder release and route restoration complete.
+        worker.execute(() -> main.post(() -> {
+            if (!closed && ticket == generation && !busy) continuation.run();
+        }));
+    }
+    @Override public void close() { closed = true; stop(); worker.shutdown(); }
 }
